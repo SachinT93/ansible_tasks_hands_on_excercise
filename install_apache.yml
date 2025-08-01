@@ -1,0 +1,52 @@
+---
+- name: Install and configure Apache locally
+  hosts: localhost
+  connection: local
+  become: yes
+
+  vars:
+    apache_pkg_centos: httpd
+    apache_pkg_ubuntu: apache2
+    apache_service_centos: httpd
+    apache_service_ubuntu: apache2
+    web_root: /var/www/html
+
+  tasks:
+    - name: Install Apache on CentOS
+      yum:
+        name: "{{ apache_pkg_centos }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Apache on Ubuntu
+      apt:
+        name: "{{ apache_pkg_ubuntu }}"
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure Apache service is started and enabled (CentOS)
+      service:
+        name: "{{ apache_service_centos }}"
+        state: started
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure Apache service is started and enabled (Ubuntu)
+      service:
+        name: "{{ apache_service_ubuntu }}"
+        state: started
+        enabled: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Deploy a simple HTML page
+      copy:
+        dest: "{{ web_root }}/index.html"
+        content: |
+          <html>
+            <head><title>Welcome</title></head>
+            <body><h1>Welcome to Ansible!</h1></body>
+          </html>
+        owner: root
+        group: root
+        mode: '0644'

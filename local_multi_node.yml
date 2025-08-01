@@ -1,0 +1,124 @@
+---
+- name: Deploy database server on localhost
+  hosts: db
+  become: yes
+
+  vars:
+    mysql_root_password: "YourStrongRootPass"
+
+  tasks:
+    - name: Install MySQL server (MariaDB) on Debian/Ubuntu
+      apt:
+        name: mariadb-server
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install MySQL server (MariaDB) on CentOS/RHEL
+      yum:
+        name: mariadb-server
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure MySQL service is started and enabled
+      service:
+        name: mariadb
+        state: started
+        enabled: yes
+
+    - name: Wait for MySQL to be ready
+      wait_for:
+        port: 3306
+        state: started
+        delay: 5
+        timeout: 30
+
+    - name: Set root password to "{{ mysql_root_password }}"
+      mysql_user:
+        login_user: root
+        login_password: ""
+        user: root
+        password: "{{ mysql_root_password }}"
+        host_all: yes
+        state: present
+      ignore_errors: yes
+
+    - name: Remove anonymous MySQL users
+      mysql_user:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        user: ''
+        host_all: yes
+        state: absent
+
+    - name: Remove test database
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Create application database
+      mysql_db:
+        name: appdb
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Create application user with privileges
+      mysql_user:
+        name: appuser
+        password: "appuserpass"
+        priv: 'appdb.*:ALL'
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+- name: Deploy web server on localhost
+  hosts: web
+  become: yes
+
+  vars:
+    db_host: "localhost"
+
+  tasks:
+    - name: Install Nginx on Debian/Ubuntu
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install Nginx on CentOS/RHEL
+      yum:
+        name: nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure Nginx is started and enabled
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Deploy app nginx config with DB host
+      copy:
+        dest: /etc/nginx/conf.d/app.conf
+        content: |
+          server {
+              listen 80;
+
+              location / {
+                  proxy_pass http://{{ db_host }};
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+              }
+          }
+      notify: Reload nginx
+
+  handlers:
+    - name: Reload nginx
+      service:
+        name: nginx
+        state: reloaded
+
