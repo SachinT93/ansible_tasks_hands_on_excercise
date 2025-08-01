@@ -4,7 +4,7 @@
   become: yes
 
   vars:
-    mysql_root_password: "YourStrongRootPass"
+    mysql_root_password: "Test123"
 
   tasks:
     - name: Install MySQL server (MariaDB) on Debian/Ubuntu
